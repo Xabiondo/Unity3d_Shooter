@@ -1,15 +1,27 @@
 using UnityEngine;
+using System.Collections; // <-- ¡MUY IMPORTANTE! Añade esto al principio
 
 public class Weapon : MonoBehaviour
 {
     public float range = 100f;
     public Camera playerCamera;
-    public ParticleSystem muzzleFlash; // Opcional
-    public AudioSource shootSound;     // Opcional
+    public ParticleSystem muzzleFlash;
+    public AudioSource shootSound;
+    public GameObject impactEffect;
+
+    // --- ¡NUEVAS VARIABLES! ---
+    public Transform gunBarrelTip; // La punta del cañón (donde empieza la bala)
+    private LineRenderer bulletTrail; // Referencia a nuestro Line Renderer
+
+    void Start() // <-- NECESITAMOS UN MÉTODO START()
+    {
+        // Obtenemos el componente Line Renderer al empezar
+        bulletTrail = GetComponent<LineRenderer>();
+    }
 
     void Update()
     {
-        if (Input.GetButtonDown("Fire1")) // Disparar con clic izquierdo
+        if (Input.GetButtonDown("Fire1"))
         {
             Shoot();
         }
@@ -17,37 +29,70 @@ public class Weapon : MonoBehaviour
 
     void Shoot()
     {
-        // Disparamos desde el centro de la pantalla
+        if (muzzleFlash != null)
+        {
+            muzzleFlash.Play();
+        }
+        
+        if (shootSound != null)
+        {
+            shootSound.Play();
+        }
+
         Vector3 centerScreen = new Vector3(Screen.width / 2f, Screen.height / 2f, 0);
         Ray ray = playerCamera.ScreenPointToRay(centerScreen);
         RaycastHit hit;
 
+        // --- ¡LÓGICA DEL TRAZADOR! ---
+        Vector3 trailEndPosition; // Dónde terminará el trazador
+
         if (Physics.Raycast(ray, out hit, range))
         {
             Debug.Log("Hit: " + hit.collider.name);
+            trailEndPosition = hit.point; // El trazador termina donde golpea
 
-
-
-            // Opcional: Crear efecto de impacto
+            // (Aquí va tu lógica de daño al zombie...)
+            if (hit.collider.CompareTag("Zombie"))
+            {
+                ZombieAI zombie = hit.collider.GetComponent<ZombieAI>();
+                if (zombie != null)
+                {
+                    zombie.TakeDamage(1);
+                }
+            }
+            
             if (impactEffect != null)
             {
                 Instantiate(impactEffect, hit.point, Quaternion.LookRotation(hit.normal));
             }
-
-            // Dibujar rayo desde la cámara hasta el punto de impacto
-            Debug.DrawRay(ray.origin, ray.direction * hit.distance, Color.red, 2f);
         }
         else
         {
-            // Dibujar rayo desde la cámara hasta el final del rango (si no hay impacto)
-            Debug.DrawRay(ray.origin, ray.direction * range, Color.green, 2f);
+            // Si no golpea nada, el trazador se va hasta el rango máximo
+            trailEndPosition = ray.origin + ray.direction * range;
         }
 
-        // Opcional: Reproducir efectos visuales y sonoros
-        if (muzzleFlash != null) muzzleFlash.Play();
-        if (shootSound != null) shootSound.Play();
+        // ¡Llama a la coroutine para dibujar el trazador!
+        StartCoroutine(DrawBulletTrail(trailEndPosition));
     }
 
-    // Opcional: Prefab de efecto de impacto
-    public GameObject impactEffect;
+    // --- ¡NUEVA FUNCIÓN (COROUTINE)! ---
+    // Esta función dibuja la línea y la borra poco después
+    private IEnumerator DrawBulletTrail(Vector3 endPoint)
+    {
+        // Activa la línea
+        bulletTrail.enabled = true;
+        
+        // Fija la posición de inicio (la punta del cañón)
+        bulletTrail.SetPosition(0, gunBarrelTip.position);
+        
+        // Fija la posición final (donde golpeó)
+        bulletTrail.SetPosition(1, endPoint);
+
+        // Espera un tiempo muy corto
+        yield return new WaitForSeconds(0.05f); // 0.05 segundos es un buen valor
+
+        // Desactiva la línea
+        bulletTrail.enabled = false;
+    }
 }
