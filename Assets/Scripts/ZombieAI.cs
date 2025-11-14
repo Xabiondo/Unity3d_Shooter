@@ -1,36 +1,62 @@
 using UnityEngine;
 using UnityEngine.AI;
-using System.Collections; // <-- ¡NUEVO! Necesario para las Coroutines
+using System.Collections;
 
 public class ZombieAI : MonoBehaviour
 {
     public Transform player;            // Referencia al jugador
     private NavMeshAgent agent;         // Referencia al agente
     private Animator anim;              // Referencia al Animator
-    
+
     public int health = 8;              // Vidas del zombie
     private bool isDead = false;        // Para saber si ya está muerto
 
-    // --- ¡NUEVAS VARIABLES PARA EL EFECTO VISUAL DE DAÑO! ---
-    public SkinnedMeshRenderer[] meshRenderers; // <-- Arrastra los renderers de tu zombie aquí
-    public Color damageColor = Color.red;      // Color cuando recibe daño
-    public float damageFlashDuration = 0.1f;   // Duración del "parpadeo"
+    // --- Variables de Efecto Visual de Daño ---
+    public SkinnedMeshRenderer[] meshRenderers;
+    public Color damageColor = Color.red;
+    public float damageFlashDuration = 0.1f;
+    private Color[] originalColors;
 
-    private Color[] originalColors; // Para guardar los colores originales
+    // --- ¡NUEVAS VARIABLES DE ATAQUE! ---
+    public float attackRange = 2f;      // Distancia para empezar a atacar
+    public float attackRate = 1.5f;     // Tiempo entre ataques (segundos)
+    public int attackDamage = 10;       // Daño que hace el zombie
+    private float nextAttackTime = 0f;  // Para controlar el cooldown
+    private PlayerHealth playerHealth;  // <-- ¡NUEVO! Referencia al script de vida del jugador
 
     void Start()
     {
         agent = GetComponent<NavMeshAgent>();
         anim = GetComponent<Animator>();
 
+        // --- ¡NUEVO! Configurar el NavMeshAgent para el ataque ---
+        // El agente parará automáticamente a esta distancia
+        if (agent != null)
+        {
+            agent.stoppingDistance = attackRange;
+        }
+
+        // --- Búsqueda del Jugador (como antes) ---
         if (player == null)
         {
             GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
             if (playerObj != null)
+            {
                 player = playerObj.transform;
+            }
         }
 
-        // --- ¡NUEVO! Guardar los colores originales de los materiales ---
+        // --- ¡NUEVO! Obtener la referencia al script de vida del jugador ---
+        if (player != null)
+        {
+            playerHealth = player.GetComponent<PlayerHealth>();
+            if (playerHealth == null)
+            {
+                Debug.LogError("¡El objeto del Jugador no tiene el script PlayerHealth!");
+            }
+        }
+
+        // --- Guardar colores originales (como antes) ---
         if (meshRenderers.Length > 0)
         {
             originalColors = new Color[meshRenderers.Length];
@@ -48,76 +74,158 @@ public class ZombieAI : MonoBehaviour
     {
         if (isDead) return;
 
+        // Asegurarse de que el jugador existe y el agente está listo
         if (player != null && agent != null && agent.isOnNavMesh)
         {
-            agent.SetDestination(player.position);
+            // Calcular la distancia al jugador
+            float distanceToPlayer = Vector3.Distance(transform.position, player.position);
 
-            float currentSpeed = agent.velocity.magnitude;
-            anim.SetFloat("Speed", currentSpeed);
+            // --- ¡LÓGICA DE ESTADO: ATACAR O PERSEGUIR! ---
+            if (distanceToPlayer <= agent.stoppingDistance)
+            {
+                // Estamos EN RANGO: Detener movimiento y atacar
+
+                // Forzamos la animación de Speed a 0, porque ya no nos movemos
+                anim.SetFloat("Speed", 0f);
+
+                // Girar para mirar al jugador
+                FacePlayer();
+
+                // Comprobar si ha pasado el cooldown para el próximo ataque
+                if (Time.time >= nextAttackTime)
+                {
+                    Attack(); // <-- ¡NUEVO! Llamar a la función de ataque
+                    nextAttackTime = Time.time + attackRate; // Reiniciar cooldown
+                }
+            }
+            else
+            {
+                // Estamos LEJOS: Perseguir
+                agent.SetDestination(player.position);
+
+                // Actualizar animación de movimiento (como antes)
+                float currentSpeed = agent.velocity.magnitude;
+                anim.SetFloat("Speed", currentSpeed);
+            }
         }
+    }
+
+    // --- ¡NUEVAS FUNCIONES DE ATAQUE! ---
+
+    /// <summary>
+    /// Gira al zombie para que mire al jugador suavemente
+    /// </summary>
+    void FacePlayer()
+    {
+        // No queremos que el zombie se incline si el jugador salta
+        Vector3 direction = (player.position - transform.position).normalized;
+        Quaternion lookRotation = Quaternion.LookRotation(new Vector3(direction.x, 0, direction.z));
+        // Interpola suavemente a la nueva rotación (el 5f es la velocidad de giro)
+        transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.deltaTime * 5f);
     }
 
     /// <summary>
-    /// Esta función puede ser llamada desde otros scripts (como el de disparo)
+    /// Inicia la animación de ataque
     /// </summary>
-    public void TakeDamage(int damageAmount)
+    void Attack()
     {
         if (isDead) return;
 
-        health -= damageAmount;
-        Debug.Log("¡Zombie golpeado! Vida restante: " + health);
+        // Esto solo DISPARA la animación. 
+        // El daño real se hará con un "Animation Event"
+        // (Ver instrucciones en el siguiente paso)
+        anim.SetTrigger("Attack"); // <-- ¡DEBES CREAR ESTE TRIGGER EN EL ANIMATOR!
+        Debug.Log("Zombie inicia animación de ataque");
+    }
 
-        // --- ¡NUEVO! Activar la animación de "Hit" y el efecto visual ---
-        anim.CrossFade("hitZombie", 0.5f); // <-- Esta es la nueva línea
-        StartCoroutine(DamageFlash()); // Inicia la coroutine del parpadeo
+    /// <summary>
+    /// ¡FUNCIÓN MUY IMPORTANTE!
+    /// Esta función es para ser llamada por un ANIMATION EVENT
+    /// puesto en el frame exacto de GOLPE de tu animación de ataque.
+    /// </summary>
+    public void DealDamageEvent()
+    {
+        // Doble chequeo por si el jugador o el zombie mueren justo en ese frame
+        if (isDead || playerHealth == null) return;
 
-        if (health <= 0)
+        // Comprobar si el jugador SIGUE en rango cuando la mano golpea
+        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
+
+        // Usamos un rango un pelín mayor (ej: attackRange + 0.5m) para ser generosos
+        if (distanceToPlayer <= attackRange + 0.5f)
         {
-            Die();
+            Debug.Log("¡Zombie GOLPEA al jugador!");
+            playerHealth.TakeDamage(attackDamage);
+        }
+        else
+        {
+            Debug.Log("¡Zombie ataca pero el jugador esquivó!");
         }
     }
 
+    // --- El resto de tus funciones (TakeDamage, Die, DamageFlash) ---
+    // (No cambian, así que las omito aquí por brevedad,
+    // pero deben seguir en tu script tal cual estaban)
+
+public void TakeDamage(int damageAmount)
+{
+    if (isDead) return;
+
+    health -= damageAmount;
+    Debug.Log("¡Zombie golpeado! Vida restante: " + health);
+    
+    StartCoroutine(DamageFlash()); // Mueve el flash aquí arriba
+
+    if (health <= 0)
+    {
+        Die();
+    }
+    else // <-- ¡NUEVO ELSE!
+    {
+        // Solo reproduce la animación de "hit" si el zombie NO va a morir
+        anim.CrossFade("hitZombie", 0.5f); 
+    }
+}
 void Die()
     {
-        if (isDead) return; // Asegurarse de que no se llame dos veces
-        isDead = true;
-        
-        // --- ARREGLO PARA EL "SPRINT" ---
-        // 1. Detenemos al agente y FORZAMOS su velocidad a CERO.
+        // 1. ¡Comprobación de seguridad PRIMERO!
+        // Si ya estoy muerto, no hagas nada más.
+        if (isDead) return; 
+        isDead = true; // Ahora sí, estoy muerto.
+
+        // 2. Notificar al Round Manager
+        if (RoundManager.instance != null)
+        {
+            RoundManager.instance.ZombieDied();
+        }
+
+        // 3. Detener todo movimiento y física del agente
+        // ESTO es lo que para el "movimiento loco"
         agent.velocity = Vector3.zero;
         agent.isStopped = true;
-        
-        // 2. Desactivamos el componente NavMeshAgent. Ya no lo necesitamos.
         agent.enabled = false; 
 
-        // 3. Forzamos al Animator a dejar de correr.
+        // 4. Parar la animación de correr
         anim.SetFloat("Speed", 0f);
-        // ---------------------------------
 
-        // Desactiva el collider para que no se pueda seguir disparando al cadáver
+        // 5. Desactivar el collider
         Collider zombieCollider = GetComponent<Collider>();
         if (zombieCollider != null)
         {
-            zombieCollider.enabled = false; 
+            zombieCollider.enabled = false;
         }
 
-        anim.SetTrigger("Die"); // Ahora sí, reproduce la animación de muerte
+        // 6. Iniciar la animación de muerte
+        anim.SetTrigger("Die");
         Debug.Log("¡El zombie ha muerto!");
 
-        // --- ARREGLO PARA LA DESAPARICIÓN ---
-        // AHORA DEBES CONFIGURAR ESTO.
-        // Busca tu clip de animación de muerte (ej: "zombie_death") y mira cuánto dura.
-        // Si dura 4.2 segundos, pon 4.2f aquí.
-        // Yo le pondré 5 segundos para estar seguros, pero ajústalo tú.
-        Destroy(gameObject, 20f); // <-- ¡AJUSTA ESTE TIEMPO A LA DURACIÓN DE TU ANIMACIÓN!
+        // 7. Destruir el objeto después de la animación
+        Destroy(gameObject, 20f);
     }
-
-    // --- ¡NUEVA FUNCIÓN! Coroutine para el efecto visual de "parpadeo" ---
     IEnumerator DamageFlash()
     {
-        if (meshRenderers.Length == 0) yield break; // Si no hay renderers, sal de aquí
+        if (meshRenderers.Length == 0) yield break;
 
-        // Cambiar a color de daño
         foreach (SkinnedMeshRenderer renderer in meshRenderers)
         {
             if (renderer != null && renderer.material.HasProperty("_Color"))
@@ -126,10 +234,8 @@ void Die()
             }
         }
 
-        // Esperar un corto tiempo
         yield return new WaitForSeconds(damageFlashDuration);
 
-        // Volver a los colores originales
         for (int i = 0; i < meshRenderers.Length; i++)
         {
             if (meshRenderers[i] != null && meshRenderers[i].material.HasProperty("_Color"))

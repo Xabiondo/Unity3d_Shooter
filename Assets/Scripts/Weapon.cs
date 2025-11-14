@@ -9,6 +9,8 @@ public class Weapon : MonoBehaviour
     public AudioSource shootSound;
     public GameObject impactEffect;
 
+    private Animator anim;
+
     // --- ¡NUEVAS VARIABLES! ---
     public Transform gunBarrelTip; // La punta del cañón (donde empieza la bala)
     private LineRenderer bulletTrail; // Referencia a nuestro Line Renderer
@@ -17,6 +19,7 @@ public class Weapon : MonoBehaviour
     {
         // Obtenemos el componente Line Renderer al empezar
         bulletTrail = GetComponent<LineRenderer>();
+        anim = GetComponentInChildren<Animator>();
     }
 
     void Update()
@@ -38,6 +41,8 @@ public class Weapon : MonoBehaviour
         {
             shootSound.Play();
         }
+
+        anim.SetTrigger("Shoot");
 
         Vector3 centerScreen = new Vector3(Screen.width / 2f, Screen.height / 2f, 0);
         Ray ray = playerCamera.ScreenPointToRay(centerScreen);
