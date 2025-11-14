@@ -6,6 +6,8 @@ public class PlayerMovement : MonoBehaviour
 {
     [Header("Movement")]
     public float moveSpeed;
+    public float sprintMultiplier = 1.5f; // <-- NUEVO: Multiplicador de velocidad
+    private float currentMoveSpeed; // <-- NUEVO: Para guardar la velocidad actual
 
     public float groundDrag;
     [Header("Ground Check")]
@@ -17,6 +19,7 @@ public class PlayerMovement : MonoBehaviour
 
     [Header("Keybinds")]
     public KeyCode jumpKey = KeyCode.Space;
+    public KeyCode sprintKey = KeyCode.Tab; // <-- NUEVO: Tecla de Sprint
 
     public float playerHeight ; 
     public LayerMask whatIsGround;
@@ -35,6 +38,7 @@ public class PlayerMovement : MonoBehaviour
         rb = GetComponent<Rigidbody>(); 
         rb.freezeRotation = true;
         readyToJump = true ;
+        currentMoveSpeed = moveSpeed; // <-- NUEVO: Inicializar velocidad
     }
 
     void Update()
@@ -42,17 +46,16 @@ public class PlayerMovement : MonoBehaviour
         grounded = Physics.Raycast(transform.position , Vector3.down , playerHeight * 0.5f + 0.2f , whatIsGround);
 
         MyInput();
+        HandleSprinting(); // <-- NUEVO: Llama a la función de sprint
         SpeedControl();
 
         if (grounded)
         {
             rb.drag = groundDrag; 
         }
-    
         else
         {
             rb.drag = 0 ; 
-            
         }
     }
 
@@ -74,32 +77,61 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
+    // --- ¡NUEVA FUNCIÓN DE SPRINT! ---
+    private void HandleSprinting()
+    {
+        // Si mantienes pulsada la tecla de sprint Y estás en el suelo
+        if (Input.GetKey(sprintKey) && grounded)
+        {
+            currentMoveSpeed = moveSpeed * sprintMultiplier;
+        }
+        else
+        {
+            currentMoveSpeed = moveSpeed;
+        }
+    }
+
+    // --- ¡FUNCIÓN DE MOVIMIENTO CORREGIDA! ---
     private void MovePlayer()
     {
         moveDirection = orientation.forward * verticalInput + orientation.right * horizontalInput;
-        rb.AddForce(moveDirection.normalized * moveSpeed * 10f, ForceMode.Force); // ❌ "addForce" → ✅ "AddForce"
-        if (!grounded)
+
+        // Lógica corregida: solo se aplica una fuerza,
+        // ya sea la de suelo o la de aire.
+
+        if (grounded)
         {
-            rb.AddForce(moveDirection.normalized * moveSpeed * 10f * airMultiplier, ForceMode.Force);
-        }else if(grounded){
-            rb.AddForce(moveDirection.normalized * moveSpeed * 10f , ForceMode.Force);
+            // Aplicar fuerza en el suelo (usa currentMoveSpeed para el sprint)
+            rb.AddForce(moveDirection.normalized * currentMoveSpeed * 10f, ForceMode.Force);
         }
-        
+        else if (!grounded)
+        {
+            // Aplicar fuerza en el aire (usa currentMoveSpeed y multiplicador)
+            rb.AddForce(moveDirection.normalized * currentMoveSpeed * 10f * airMultiplier, ForceMode.Force);
+        }
     }
-    private void SpeedControl(){
+
+    private void SpeedControl()
+    {
         Vector3 flatVel = new Vector3(rb.velocity.x , 0 , rb.velocity.z);
 
-        if (flatVel.magnitude > moveSpeed){
-            Vector3 limitedVel = flatVel.normalized * moveSpeed;
+        // --- CORREGIDO: Usa currentMoveSpeed para el límite ---
+        if (flatVel.magnitude > currentMoveSpeed)
+        {
+            Vector3 limitedVel = flatVel.normalized * currentMoveSpeed;
             rb.velocity = new Vector3(limitedVel.x , rb.velocity.y , limitedVel.z);
         }
     }
-    private void Jump(){
+
+    private void Jump()
+    {
         Debug.Log("Jumped");
         rb.velocity = new Vector3(rb.velocity.x , 0 , rb.velocity.z);
         rb.AddForce(transform.up * jumpForce , ForceMode.Impulse);
     }
-    private void ResetJump(){
+
+    private void ResetJump()
+    {
         readyToJump = true ; 
     }
 }

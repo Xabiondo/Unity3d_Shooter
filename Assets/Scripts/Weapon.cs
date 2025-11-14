@@ -11,9 +11,14 @@ public class Weapon : MonoBehaviour
 
     private Animator anim;
 
-    // --- ¡NUEVAS VARIABLES! ---
     public Transform gunBarrelTip; // La punta del cañón (donde empieza la bala)
     private LineRenderer bulletTrail; // Referencia a nuestro Line Renderer
+
+    // --- ¡NUEVAS VARIABLES PARA DISPARO AUTOMÁTICO! ---
+    [Header("Cadencia de Disparo")]
+    public float disparosPorSegundo = 10f; // Balas que dispara por segundo
+    private float proximoDisparo = 0f;    // Para controlar el "cooldown"
+    // --- FIN DE NUEVAS VARIABLES ---
 
     void Start() // <-- NECESITAMOS UN MÉTODO START()
     {
@@ -24,9 +29,17 @@ public class Weapon : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetButtonDown("Fire1"))
+        // --- ¡LÓGICA ACTUALIZADA! ---
+        // 1. Cambiamos GetButtonDown por GetButton (para que detecte si está MANTENIDO)
+        // 2. Añadimos una comprobación de tiempo (Time.time >= proximoDisparo)
+        
+        if (Input.GetButton("Fire1") && Time.time >= proximoDisparo)
         {
-            Shoot();
+            // ¡Calculamos el tiempo del siguiente disparo!
+            // Si disparamos 10 balas/seg, el tiempo entre balas es 1/10 = 0.1s
+            proximoDisparo = Time.time + 1f / disparosPorSegundo;
+            
+            Shoot(); // Llamamos a la función de disparo
         }
     }
 

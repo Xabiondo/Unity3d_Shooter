@@ -86,7 +86,7 @@ public class ZombieAI : MonoBehaviour
                 // Estamos EN RANGO: Detener movimiento y atacar
 
                 // Forzamos la animación de Speed a 0, porque ya no nos movemos
-                anim.SetFloat("Speed", 0f);
+               // anim.SetFloat("Speed", 0f);
 
                 // Girar para mirar al jugador
                 FacePlayer();
@@ -105,7 +105,7 @@ public class ZombieAI : MonoBehaviour
 
                 // Actualizar animación de movimiento (como antes)
                 float currentSpeed = agent.velocity.magnitude;
-                anim.SetFloat("Speed", currentSpeed);
+              //  anim.SetFloat("Speed", currentSpeed);
             }
         }
     }
@@ -206,7 +206,7 @@ void Die()
         agent.enabled = false; 
 
         // 4. Parar la animación de correr
-        anim.SetFloat("Speed", 0f);
+        //anim.SetFloat("Speed", 0f);
 
         // 5. Desactivar el collider
         Collider zombieCollider = GetComponent<Collider>();
