@@ -14,7 +14,11 @@ public class PlayerHealth : MonoBehaviour
     public Color flashColor = new Color(1f, 0f, 0f, 0.1f);
     public float flashSpeed = 5f;
     bool damaged = false;
-    
+
+    // --- Punto de Reaparición ---
+    // Arrastra aquí un objeto (como un Empty) que marque dónde reaparecerá
+    public Transform puntoDeReaparicion; // <--- NUEVO
+
     // --- Referencia a la lógica de muerte/Game Over ---
     // (Podríamos necesitar esto más tarde)
     // public PlayerDeathHandler deathHandler; 
@@ -59,7 +63,7 @@ public class PlayerHealth : MonoBehaviour
     /// </summary>
     public void TakeDamage(int amount)
     {
-        if (currentHealth <= 0) return; // Ya está muerto
+        if (currentHealth <= 0) return; // Ya está muerto (o en proceso de respawn)
 
         damaged = true; // Activa el flash de daño
         currentHealth -= amount;
@@ -81,7 +85,36 @@ public class PlayerHealth : MonoBehaviour
     {
         Debug.Log("¡El jugador ha muerto!");
         
-        // Aquí iría tu lógica de Game Over
+        // --- Lógica de Teletransporte / Reaparición ---
+        // Comprueba si asignaste un punto de reaparición en el Inspector
+        if (puntoDeReaparicion != null)
+        {
+            // Mueve al jugador a la posición del punto de reaparición
+            transform.position = puntoDeReaparicion.position; // <--- NUEVO
+
+            // Opcional: También puedes resetear la rotación
+            // transform.rotation = puntoDeReaparicion.rotation; // <--- NUEVO (Opcional)
+            
+            // Restaura la salud
+            currentHealth = maxHealth; // <--- NUEVO
+            
+            // Actualiza la barra de vida en la UI
+            if (healthSlider != null) // <--- NUEVO
+            {
+                healthSlider.value = currentHealth; // <--- NUEVO
+            }
+            
+            Debug.Log("¡Jugador reaparecido!");
+        }
+        else
+        {
+            // Si no hay punto de reaparición, simplemente registra la muerte
+            Debug.LogWarning("¡El jugador murió pero no hay 'puntoDeReaparicion' asignado!");
+            // Aquí podrías poner otra lógica, como destruir el objeto:
+            // Destroy(gameObject);
+        }
+
+        // Aquí iría tu lógica de Game Over (si no quieres reaparecer)
         // Por ejemplo:
         // 1. Activar animación de muerte del jugador
         // 2. Mostrar menú de "Game Over"
@@ -91,7 +124,7 @@ public class PlayerHealth : MonoBehaviour
         // Si tienes un script que maneje esto:
         // if (deathHandler != null)
         // {
-        //    deathHandler.HandleDeath();
+        //    deathHandler.HandleDeath();
         // }
     }
 }

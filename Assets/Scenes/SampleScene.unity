@@ -3478,6 +3478,7 @@ MonoBehaviour:
   damageImage: {fileID: 1957608273}
   flashColor: {r: 1, g: 0, b: 0, a: 0.1}
   flashSpeed: 5
+  puntoDeReaparicion: {fileID: 1981695575}
 --- !u!1 &601062528 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 279754824555643807, guid: 7ad27798a56af29409bfd87e866e6458, type: 3}
